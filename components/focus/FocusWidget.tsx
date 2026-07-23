@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
 import {
   useTimerStore,
@@ -12,6 +12,7 @@ import { primeAudio } from "@/lib/sound/chime";
 import { Button } from "@/components/ui/button";
 import { FloatingNotes } from "./FloatingNotes";
 import { ChevronDown, NotebookPen, Repeat, Timer as TimerIcon } from "lucide-react";
+import { toggleTask } from "@/app/(app)/tasks/actions";
 
 type Task = { id: string; title: string };
 
@@ -33,6 +34,7 @@ export function FocusWidget({ tasks }: { tasks: Task[] }) {
   const [expanded, setExpanded] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState("");
+  const [, startTransition] = useTransition();
 
   const {
     mode,
@@ -63,7 +65,12 @@ export function FocusWidget({ tasks }: { tasks: Task[] }) {
   useEffect(() => {
     if (pathname === "/focus" && !autoExpandedForRoute.current) {
       autoExpandedForRoute.current = true;
-      setExpanded(true);
+      try {
+        const pref = localStorage.getItem("focusWidget.autoExpand");
+        if (pref === "true") setExpanded(true);
+      } catch (e) {
+        // fallback: don't auto-expand
+      }
     }
   }, [pathname]);
 
@@ -208,6 +215,23 @@ export function FocusWidget({ tasks }: { tasks: Task[] }) {
             <Button type="button" size="sm" variant="ghost" onClick={reset}>
               End
             </Button>
+            {taskTitle && (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onClick={() => {
+                  if (!taskId) return;
+                  // mark the active task as completed and end the session
+                  startTransition(async () => {
+                    await toggleTask(taskId, true);
+                    reset();
+                  });
+                }}
+              >
+                Complete Task
+              </Button>
+            )}
             <Button
               type="button"
               size="icon"

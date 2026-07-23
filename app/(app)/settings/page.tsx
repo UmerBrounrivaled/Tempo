@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { updateProfile, disconnectCalendar } from "./actions";
-import { PlanningStyleField } from "@/components/settings/PlanningStyleField";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Download, CalendarCheck2, CalendarPlus, FileText } from "lucide-react";
+import { WidgetToggle } from "@/components/WidgetToggle";
 
 export default async function SettingsPage({
   searchParams,
@@ -26,9 +26,7 @@ export default async function SettingsPage({
   const [{ data: profile }, { data: calendarConnection }] = await Promise.all([
     supabase
       .from("profiles")
-      .select(
-        "full_name, daily_goal_minutes, sound_on_session_end, auto_start_break, timezone, planning_style"
-      )
+      .select("full_name, daily_goal_minutes, sound_on_session_end, auto_start_break, timezone")
       .eq("id", user?.id)
       .single(),
     supabase
@@ -91,16 +89,10 @@ export default async function SettingsPage({
             <Button type="submit" className="w-fit">
               Save
             </Button>
+            <div className="mt-4">
+              <WidgetToggle />
+            </div>
           </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Plan Your Day style</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PlanningStyleField value={(profile?.planning_style as "priorities" | "timeline" | "quickadd") ?? "priorities"} />
         </CardContent>
       </Card>
 

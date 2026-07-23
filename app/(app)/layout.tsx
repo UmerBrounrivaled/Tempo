@@ -7,7 +7,6 @@ import { Footer } from "@/components/Footer";
 import { TimerEngine } from "@/components/timer/TimerEngine";
 import { FocusWidget } from "@/components/focus/FocusWidget";
 import { ProjectSwitcher } from "@/components/projects/ProjectSwitcher";
-import { ProjectGate } from "@/components/projects/ProjectGate";
 import { listProjects, getActiveProject } from "./projects/actions";
 import { getIncompleteTasks } from "./focus/actions";
 import { createClient } from "@/lib/supabase/server";
@@ -60,9 +59,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <aside className="hidden w-56 flex-col border-r border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950 md:flex">
         <div className="mb-3 px-2 text-lg font-semibold">Tempo</div>
         <div className="mb-4">
-          {activeProject && (
-            <ProjectSwitcher projects={projects} activeProjectId={activeProject.id} />
-          )}
+          <ProjectSwitcher projects={projects} activeProjectId={activeProject?.id ?? null} />
         </div>
         <nav className="flex flex-1 flex-col gap-1">
           {NAV.map(({ href, label, icon: Icon }) => (
@@ -89,9 +86,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-950 md:hidden">
         <div className="flex items-center gap-2">
           <span className="text-lg font-semibold">Tempo</span>
-          {activeProject && (
-            <ProjectSwitcher projects={projects} activeProjectId={activeProject.id} />
-          )}
+          <ProjectSwitcher projects={projects} activeProjectId={activeProject?.id ?? null} />
         </div>
         <div className="flex items-center gap-1">
           <ThemeToggle iconOnly />
@@ -104,7 +99,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       <main className="flex-1 p-4 pb-20 md:p-8 md:pb-8">
-        {activeProject ? children : <ProjectGate projects={projects} />}
+        {children}
         <Footer />
       </main>
 
