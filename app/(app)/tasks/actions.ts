@@ -118,3 +118,40 @@ export async function deleteTask(taskId: string): Promise<ActionResult> {
     return { error: "Something went wrong while deleting the task." };
   }
 }
+
+export async function setTaskPriority(
+  taskId: string,
+  priority: "low" | "medium" | "high",
+  restoreTodo = false
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { error: "You're signed out. Please log in again." };
+    }
+
+    const updates: any = { priority };
+    if (restoreTodo) {
+      updates.status = "todo";
+      updates.completed_at = null;
+    }
+
+    const { error } = await supabase.from("tasks").update(updates).eq("id", taskId).eq("user_id", user.id);
+    if (error) {
+      console.error("setTaskPriority update error:", error.message);
+      return { error: `Couldn't update task: ${error.message}` };
+    }
+
+    revalidatePath("/today");
+    revalidatePath("/tasks");
+    return {};
+  } catch (err) {
+    console.error("setTaskPriority unexpected error:", err);
+    return { error: "Something went wrong while updating the task." };
+  }
+}

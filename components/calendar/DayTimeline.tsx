@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarPlus } from "lucide-react";
+import { format } from "date-fns";
 
 export type CalendarEvent = {
   id: string;
@@ -128,19 +129,41 @@ export function DayTimeline({
               </div>
             ))}
 
-          {focusBlocks.map((b) => (
-            <div
-              key={b.id}
-              className={`absolute left-14 right-2 rounded-md border px-2 py-1 text-xs ${
-                b.type === "focus"
-                  ? "border-neutral-300 bg-neutral-100 text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
-                  : "border-neutral-200 bg-neutral-50 text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400"
-              }`}
-              style={{ top: offsetPx(b.start), height: durationPx(b.start, b.end) }}
-            >
-              <span className="truncate block font-medium">{b.title}</span>
-            </div>
-          ))}
+          {focusBlocks.map((b) => {
+            const top = offsetPx(b.start);
+            const height = durationPx(b.start, b.end);
+            const startDate = new Date(b.start);
+            const endDate = new Date(b.end);
+            const durationMinutes = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 60000));
+            return (
+              <div
+                key={b.id}
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget as HTMLElement;
+                  const rect = el.getBoundingClientRect();
+                  const tooltip = document.createElement("div");
+                  tooltip.className = "absolute z-20 rounded-md bg-white px-3 py-1 text-xs text-neutral-700 shadow-md dark:bg-neutral-900 dark:text-neutral-200";
+                  tooltip.style.left = `${rect.right + 8}px`;
+                  tooltip.style.top = `${rect.top}px`;
+                  tooltip.textContent = `Duration: ${durationMinutes} min\n${format(startDate, "hh:mm a")} - ${format(endDate, "hh:mm a")}`;
+                  tooltip.id = `focus-tooltip-${b.id}`;
+                  document.body.appendChild(tooltip);
+                }}
+                onMouseLeave={() => {
+                  const tt = document.getElementById(`focus-tooltip-${b.id}`);
+                  if (tt) tt.remove();
+                }}
+                className={`absolute left-14 right-2 rounded-md border px-2 py-1 text-xs ${
+                  b.type === "focus"
+                    ? "border-neutral-300 bg-neutral-100 text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+                    : "border-neutral-200 bg-neutral-50 text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400"
+                }`}
+                style={{ top, height }}
+              >
+                <span className="truncate block font-medium">{b.title}</span>
+              </div>
+            );
+          })}
 
           {nowOffset !== null && (
             <div

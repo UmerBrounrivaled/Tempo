@@ -48,7 +48,12 @@ export async function planYourDay(formData: FormData): Promise<{ error?: string 
   const goalMinutesRaw = formData.get("goalMinutes") as string;
   const goalMinutes = goalMinutesRaw ? Number(goalMinutesRaw) : null;
   const reflection = (formData.get("note") as string)?.trim() || null;
+  // New: accept per-priority buckets so the Plan UI can assign tasks to
+  // Today / Sooner / Later. These are submitted as JSON arrays of ids.
   const orderedTaskIds = JSON.parse((formData.get("orderedTaskIds") as string) || "[]") as string[];
+  const highIds = JSON.parse((formData.get("priority_high") as string) || "[]") as string[];
+  const mediumIds = JSON.parse((formData.get("priority_medium") as string) || "[]") as string[];
+  const lowIds = JSON.parse((formData.get("priority_low") as string) || "[]") as string[];
 
   const { error } = await supabase.from("daily_plans").upsert(
     {
@@ -60,6 +65,41 @@ export async function planYourDay(formData: FormData): Promise<{ error?: string 
     },
     { onConflict: "user_id,project_id,plan_date" }
   );
+
+  if (error) return { error: `Couldn't save your plan: ${error.message}` };
+
+  // Persist the reordered priority as each task's order_index and the
+  // explicit priority column (high/medium/low). High -> today, medium -> sooner, low -> later.
+  const updates: Promise<any>[] = [];
+  highIds.forEach((id, index) =>
+    updates.push(
+      supabase
+        .from("tasks")
+        .update({ order_index: index, priority: "high" })
+        .eq("id", id)
+        .eq("user_id", user.id)
+    )
+  );
+  mediumIds.forEach((id, index) =>
+    updates.push(
+      supabase
+        .from("tasks")
+        .update({ order_index: index, priority: "medium" })
+        .eq("id", id)
+        .eq("user_id", user.id)
+    )
+  );
+  lowIds.forEach((id, index) =>
+    updates.push(
+      supabase
+        .from("tasks")
+        .update({ order_index: index, priority: "low" })
+        .eq("id", id)
+        .eq("user_id", user.id)
+    )
+  );
+
+  await Promise.all(updates);
   if (error) return { error: `Couldn't save your plan: ${error.message}` };
 
   // Persist the reordered priority as each task's order_index (existing

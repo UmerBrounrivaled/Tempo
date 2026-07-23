@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Download, CalendarCheck2, CalendarPlus, FileText } from "lucide-react";
+import { WidgetToggle } from "@/components/WidgetToggle";
 
 export default async function SettingsPage({
   searchParams,
@@ -88,6 +89,9 @@ export default async function SettingsPage({
             <Button type="submit" className="w-fit">
               Save
             </Button>
+            <div className="mt-4">
+              <WidgetToggle />
+            </div>
           </form>
         </CardContent>
       </Card>

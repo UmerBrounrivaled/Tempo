@@ -53,24 +53,69 @@ function SortableRow({ task }: { task: Task }) {
 
 export function PlanYourDay({ tasks }: { tasks: Task[] }) {
   const [modalOpen, setModalOpen] = useState(false);
-  const [order, setOrder] = useState(tasks.map((t) => t.id));
+  // We'll render three buckets and keep their ordering independently so
+  // users can drag tasks between Today / Sooner / Later.
+  const [high, setHigh] = useState(tasks.map((t) => t.id));
+  const [medium, setMedium] = useState<string[]>([]);
+  const [low, setLow] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  const orderedTasks = order
-    .map((id) => tasks.find((t) => t.id === id))
-    .filter((t): t is Task => Boolean(t));
+  // Seed medium/low if any tasks had different priorities (defensive)
+  useState(() => {
+    const byId = new Map(tasks.map((t) => [t.id, t]));
+    const highInit: string[] = [];
+    const medInit: string[] = [];
+    const lowInit: string[] = [];
+    tasks.forEach((t) => {
+      if ((t as any).priority === "high") highInit.push(t.id);
+      else if ((t as any).priority === "low") lowInit.push(t.id);
+      else medInit.push(t.id);
+    });
+    setHigh(highInit.length ? highInit : tasks.map((t) => t.id));
+    setMedium(medInit);
+    setLow(lowInit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+
+  function findListContaining(id: string) {
+    if (high.includes(id)) return { list: high, setList: setHigh } as any;
+    if (medium.includes(id)) return { list: medium, setList: setMedium } as any;
+    return { list: low, setList: setLow } as any;
+  }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    setOrder((current) => {
-      const oldIndex = current.indexOf(String(active.id));
-      const newIndex = current.indexOf(String(over.id));
-      return arrayMove(current, oldIndex, newIndex);
-    });
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    const source = findListContaining(activeId);
+    const dest = findListContaining(overId);
+    if (!source || !dest) return;
+
+    // If moving inside same list
+    if (source.list === dest.list) {
+      const oldIndex = source.list.indexOf(activeId);
+      const newIndex = dest.list.indexOf(overId);
+      const copied = Array.from(source.list);
+      copied.splice(oldIndex, 1);
+      copied.splice(newIndex, 0, activeId);
+      source.setList(copied);
+      return;
+    }
+
+    // Moving between lists
+    const sourceCopy = Array.from(source.list);
+    sourceCopy.splice(sourceCopy.indexOf(activeId), 1);
+    const destCopy = Array.from(dest.list);
+    const insertIndex = Math.max(0, destCopy.indexOf(overId));
+    destCopy.splice(insertIndex, 0, activeId);
+    source.setList(sourceCopy);
+    dest.setList(destCopy);
   }
 
   function handleSkip() {
@@ -83,7 +128,10 @@ export function PlanYourDay({ tasks }: { tasks: Task[] }) {
   }
 
   function handleSubmit(formData: FormData) {
-    formData.set("orderedTaskIds", JSON.stringify(order));
+    // Submit JSON arrays for each priority bucket
+    formData.set("priority_high", JSON.stringify(high));
+    formData.set("priority_medium", JSON.stringify(medium));
+    formData.set("priority_low", JSON.stringify(low));
     setError(null);
     startTransition(async () => {
       const result = await planYourDay(formData);
@@ -129,16 +177,103 @@ export function PlanYourDay({ tasks }: { tasks: Task[] }) {
             </p>
 
             <form action={handleSubmit} className="flex flex-col gap-4">
-              {orderedTasks.length > 0 ? (
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                  <SortableContext items={order} strategy={verticalListSortingStrategy}>
-                    <ul className="flex max-h-56 flex-col gap-1.5 overflow-y-auto">
-                      {orderedTasks.map((task) => (
-                        <SortableRow key={task.id} task={task} />
-                      ))}
-                    </ul>
-                  </SortableContext>
-                </DndContext>
+              {tasks.length > 0 ? (
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <h4 className="mb-2 text-sm font-medium">Today</h4>
+                    <div className="max-h-48 overflow-y-auto rounded border border-neutral-100 p-2 dark:border-neutral-800">
+                      {high.map((id) => {
+                        const t = tasks.find((x) => x.id === id);
+                        if (!t) return null;
+                        return (
+                          <div key={id} className="mb-2 flex items-center justify-between gap-2 rounded bg-white px-2 py-1 text-sm dark:bg-neutral-900">
+                            <span className="truncate">{t.title}</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  // move to medium
+                                  setHigh((s) => s.filter((i) => i !== id));
+                                  setMedium((s) => [id, ...s]);
+                                }}
+                                className="text-xs text-neutral-400 hover:text-neutral-700"
+                              >
+                                →
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="mb-2 text-sm font-medium">Sooner</h4>
+                    <div className="max-h-48 overflow-y-auto rounded border border-neutral-100 p-2 dark:border-neutral-800">
+                      {medium.map((id) => {
+                        const t = tasks.find((x) => x.id === id);
+                        if (!t) return null;
+                        return (
+                          <div key={id} className="mb-2 flex items-center justify-between gap-2 rounded bg-white px-2 py-1 text-sm dark:bg-neutral-900">
+                            <span className="truncate">{t.title}</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  // move to high
+                                  setMedium((s) => s.filter((i) => i !== id));
+                                  setHigh((s) => [id, ...s]);
+                                }}
+                                className="text-xs text-neutral-400 hover:text-neutral-700"
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  // move to low
+                                  setMedium((s) => s.filter((i) => i !== id));
+                                  setLow((s) => [id, ...s]);
+                                }}
+                                className="text-xs text-neutral-400 hover:text-neutral-700"
+                              >
+                                ↓
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="mb-2 text-sm font-medium">Later</h4>
+                    <div className="max-h-48 overflow-y-auto rounded border border-neutral-100 p-2 dark:border-neutral-800">
+                      {low.map((id) => {
+                        const t = tasks.find((x) => x.id === id);
+                        if (!t) return null;
+                        return (
+                          <div key={id} className="mb-2 flex items-center justify-between gap-2 rounded bg-white px-2 py-1 text-sm dark:bg-neutral-900">
+                            <span className="truncate">{t.title}</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  // move to medium
+                                  setLow((s) => s.filter((i) => i !== id));
+                                  setMedium((s) => [id, ...s]);
+                                }}
+                                className="text-xs text-neutral-400 hover:text-neutral-700"
+                              >
+                                ←
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <p className="text-sm text-neutral-400 dark:text-neutral-500">
                   No tasks yet — you can still set a goal and jump in.
