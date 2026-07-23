@@ -26,29 +26,6 @@ export async function updateProfile(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
-export async function updatePlanningStyle(formData: FormData): Promise<{ error?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "You're signed out. Please log in again." };
-
-  const planningStyle = formData.get("planningStyle") as string;
-  if (!["priorities", "timeline", "quickadd"].includes(planningStyle)) {
-    return { error: "Invalid planning style." };
-  }
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({ planning_style: planningStyle })
-    .eq("id", user.id);
-
-  if (error) return { error: `Couldn't save: ${error.message}` };
-
-  revalidatePath("/", "layout");
-  return {};
-}
-
 export async function disconnectCalendar() {
   const supabase = await createClient();
   const {

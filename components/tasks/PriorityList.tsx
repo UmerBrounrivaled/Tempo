@@ -1,10 +1,9 @@
 "use client";
 
 import { useMemo, useOptimistic, useRef, useState, useTransition } from "react";
-import { createTask, toggleTask, deleteTask } from "@/app/(app)/tasks/actions";
+import { createTask, toggleTask, deleteTask, setTaskPriority } from "@/app/(app)/tasks/actions";
 import { useTimerStore } from "@/lib/store/timerStore";
 import { primeAudio } from "@/lib/sound/chime";
-import { formatFocusTotal } from "@/lib/focus-totals";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { X, Loader2, AlertCircle, Play, ChevronDown, ChevronRight } from "lucide-react";
@@ -29,7 +28,6 @@ function TaskRow({
   onDelete,
   onStartFocus,
   disabled,
-  focusSeconds,
 }: {
   task: Task;
   indent: boolean;
@@ -37,9 +35,7 @@ function TaskRow({
   onDelete: (id: string) => void;
   onStartFocus: (task: Task) => void;
   disabled: boolean;
-  focusSeconds?: number;
 }) {
-  const focusLabel = formatFocusTotal(focusSeconds);
   return (
     <li
       className={`flex items-center gap-3 rounded-md border border-neutral-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900 ${
@@ -54,20 +50,15 @@ function TaskRow({
         onChange={(e) => onToggle(task.id, e.target.checked)}
         className="h-4 w-4"
       />
-      <div className="min-w-0 flex-1">
-        <span
-          className={
-            task.status === "done"
-              ? "block truncate text-sm text-neutral-400 line-through dark:text-neutral-500"
-              : "block truncate text-sm text-neutral-900 dark:text-neutral-50"
-          }
-        >
-          {task.title}
-        </span>
-        {focusLabel && (
-          <span className="text-xs text-neutral-400 dark:text-neutral-500">{focusLabel}</span>
-        )}
-      </div>
+      <span
+        className={
+          task.status === "done"
+            ? "flex-1 text-sm text-neutral-400 line-through dark:text-neutral-500"
+            : "flex-1 text-sm text-neutral-900 dark:text-neutral-50"
+        }
+      >
+        {task.title}
+      </span>
       {task.status !== "done" && (
         <button
           type="button"
@@ -91,13 +82,7 @@ function TaskRow({
   );
 }
 
-export function PriorityList({
-  tasks,
-  focusSecondsByTask = {},
-}: {
-  tasks: Task[];
-  focusSecondsByTask?: Record<string, number>;
-}) {
+export function PriorityList({ tasks }: { tasks: Task[] }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [loggedOpen, setLoggedOpen] = useState(false);
@@ -122,22 +107,22 @@ export function PriorityList({
     }
   );
 
-  const { openParents, loggedTasks } = useMemo(() => {
-    const byParent = new Map<string, Task[]>();
+  const { todayTasks, soonerTasks, laterTasks, loggedTasks } = useMemo(() => {
+    const today: Task[] = [];
+    const sooner: Task[] = [];
+    const later: Task[] = [];
+    const logged: Task[] = [];
     optimisticTasks.forEach((t) => {
-      if (t.parent_task_id) {
-        byParent.set(t.parent_task_id, [...(byParent.get(t.parent_task_id) ?? []), t]);
+      if (t.status === "done" && !t.parent_task_id) {
+        logged.push(t);
+        return;
       }
+      if (t.parent_task_id) return; // skip children in the primary buckets
+      if (t.priority === "high") today.push(t);
+      else if (t.priority === "low") later.push(t);
+      else sooner.push(t);
     });
-    const topLevel = optimisticTasks.filter((t) => !t.parent_task_id);
-    return {
-      openParents: topLevel
-        .filter((t) => t.status !== "done")
-        .map((parent) => ({ parent, children: byParent.get(parent.id) ?? [] })),
-      loggedTasks: optimisticTasks.filter(
-        (t) => t.status === "done" && !t.parent_task_id
-      ),
-    };
+    return { todayTasks: today, soonerTasks: sooner, laterTasks: later, loggedTasks: logged };
   }, [optimisticTasks]);
 
   function handleAdd(formData: FormData) {
@@ -207,36 +192,64 @@ export function PriorityList({
       )}
 
       <ul className="flex flex-col gap-1.5">
-        {openParents.length === 0 && (
+        {todayTasks.length === 0 && soonerTasks.length === 0 && laterTasks.length === 0 && (
           <p className="py-6 text-center text-sm text-neutral-400 dark:text-neutral-500">
             No tasks yet — add your first one above.
           </p>
         )}
-        {openParents.map(({ parent, children }) => (
-          <div key={parent.id} className="flex flex-col gap-1.5">
-            <TaskRow
-              task={parent}
-              indent={false}
-              onToggle={handleToggle}
-              onDelete={handleDelete}
-              onStartFocus={handleStartFocus}
-              disabled={parent.id.startsWith("temp-")}
-              focusSeconds={focusSecondsByTask[parent.id]}
-            />
-            {children.map((child) => (
-              <TaskRow
-                key={child.id}
-                task={child}
-                indent
-                onToggle={handleToggle}
-                onDelete={handleDelete}
-                onStartFocus={handleStartFocus}
-                disabled={child.id.startsWith("temp-")}
-                focusSeconds={focusSecondsByTask[child.id]}
-              />
-            ))}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <h3 className="mb-2 text-xs font-medium text-neutral-500">Today</h3>
+            <ul className="flex flex-col gap-1.5">
+              {todayTasks.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  indent={false}
+                  onToggle={handleToggle}
+                  onDelete={handleDelete}
+                  onStartFocus={handleStartFocus}
+                  disabled={t.id.startsWith("temp-")}
+                />
+              ))}
+            </ul>
           </div>
-        ))}
+
+          <div>
+            <h3 className="mb-2 text-xs font-medium text-neutral-500">Sooner</h3>
+            <ul className="flex flex-col gap-1.5">
+              {soonerTasks.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  indent={false}
+                  onToggle={handleToggle}
+                  onDelete={handleDelete}
+                  onStartFocus={handleStartFocus}
+                  disabled={t.id.startsWith("temp-")}
+                />
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="mb-2 text-xs font-medium text-neutral-500">Later</h3>
+            <ul className="flex flex-col gap-1.5">
+              {laterTasks.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  indent={false}
+                  onToggle={handleToggle}
+                  onDelete={handleDelete}
+                  onStartFocus={handleStartFocus}
+                  disabled={t.id.startsWith("temp-")}
+                />
+              ))}
+            </ul>
+          </div>
+        </div>
       </ul>
 
       {loggedTasks.length > 0 && (
@@ -256,16 +269,57 @@ export function PriorityList({
           {loggedOpen && (
             <ul className="mt-2 flex flex-col gap-1.5">
               {loggedTasks.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  indent={false}
-                  onToggle={handleToggle}
-                  onDelete={handleDelete}
-                  onStartFocus={handleStartFocus}
-                  disabled={false}
-                  focusSeconds={focusSecondsByTask[task.id]}
-                />
+                <li key={task.id} className="flex items-center justify-between gap-2 rounded-md border border-neutral-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
+                  <div>
+                    <div className="text-sm text-neutral-700 dark:text-neutral-200">{task.title}</div>
+                    <div className="text-xs text-neutral-400 dark:text-neutral-500">Completed</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // move back to Today
+                        setError(null);
+                        startTransition(async () => {
+                          await setTaskPriority(task.id, "high", true);
+                        });
+                      }}
+                      className="text-xs text-neutral-400 hover:text-neutral-700"
+                    >
+                      Move to Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        startTransition(async () => {
+                          await setTaskPriority(task.id, "medium", true);
+                        });
+                      }}
+                      className="text-xs text-neutral-400 hover:text-neutral-700"
+                    >
+                      Move to Sooner
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        startTransition(async () => {
+                          await setTaskPriority(task.id, "low", true);
+                        });
+                      }}
+                      className="text-xs text-neutral-400 hover:text-neutral-700"
+                    >
+                      Move to Later
+                    </button>
+                    <button
+                      onClick={() => handleDelete(task.id)}
+                      className="text-xs text-neutral-400 hover:text-red-500"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </li>
               ))}
             </ul>
           )}

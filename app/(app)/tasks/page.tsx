@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { TaskList } from "@/components/tasks/TaskList";
 import { getActiveProject } from "@/app/(app)/projects/actions";
-import { getFocusTotalsByTask } from "@/lib/focus-totals";
 
 export default async function TasksPage({
   searchParams,
@@ -28,12 +27,6 @@ export default async function TasksPage({
   }
 
   const { data: tasks } = await query;
-
-  const focusSecondsByTask = await getFocusTotalsByTask(
-    supabase,
-    user?.id,
-    (tasks ?? []).map((t) => t.id)
-  );
 
   const filters = [
     { key: "all", label: "All" },
@@ -62,7 +55,7 @@ export default async function TasksPage({
           ))}
         </div>
       </div>
-      <TaskList tasks={tasks ?? []} focusSecondsByTask={focusSecondsByTask} />
+      <TaskList tasks={tasks ?? []} />
     </div>
   );
 }

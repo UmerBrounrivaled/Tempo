@@ -8,11 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getActiveProject } from "@/app/(app)/projects/actions";
 import { getTodaysPlan } from "@/app/(app)/planning/actions";
-import { PlanYourDayPriorities } from "@/components/planning/PlanYourDayPriorities";
-import { PlanYourDayTimeline } from "@/components/planning/PlanYourDayTimeline";
-import { PlanYourDayQuickAdd } from "@/components/planning/PlanYourDayQuickAdd";
+import { PlanYourDay } from "@/components/planning/PlanYourDay";
 import { getTodayEvents } from "@/lib/google/calendar";
-import { getFocusTotalsByTask } from "@/lib/focus-totals";
 import { isSameDayInTimezone } from "@/lib/date";
 import { calculateStreaks } from "@/lib/streak";
 import { subDays, format } from "date-fns";
@@ -44,7 +41,7 @@ export default async function TodayPage() {
         .order("created_at", { ascending: true }),
       supabase
         .from("profiles")
-        .select("full_name, daily_goal_minutes, timezone, planning_style")
+        .select("full_name, daily_goal_minutes, timezone")
         .eq("id", user?.id ?? "")
         .single(),
       supabase
@@ -93,12 +90,6 @@ export default async function TodayPage() {
 
   const hasCalendarConnection = Boolean(calendarConnection);
   const calendarEvents = hasCalendarConnection && user ? await getTodayEvents(user.id) : [];
-
-  const focusSecondsByTask = await getFocusTotalsByTask(
-    supabase,
-    user?.id,
-    (tasks ?? []).map((t) => t.id)
-  );
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -162,7 +153,7 @@ export default async function TodayPage() {
             <h2 className="mb-3 text-sm font-medium text-neutral-500 dark:text-neutral-400">
               Today&apos;s Priority
             </h2>
-            <PriorityList tasks={tasks ?? []} focusSecondsByTask={focusSecondsByTask} />
+            <PriorityList tasks={tasks ?? []} />
           </div>
           <div>
             <h2 className="mb-3 text-sm font-medium text-neutral-500 dark:text-neutral-400 lg:invisible">
@@ -176,19 +167,11 @@ export default async function TodayPage() {
           </div>
         </div>
       ) : (
-        (() => {
-          const unplannedTasks = (tasks ?? [])
+        <PlanYourDay
+          tasks={(tasks ?? [])
             .filter((t) => t.status !== "done" && !t.parent_task_id)
-            .map((t) => ({ id: t.id, title: t.title }));
-          switch (profile?.planning_style) {
-            case "timeline":
-              return <PlanYourDayTimeline tasks={unplannedTasks} />;
-            case "quickadd":
-              return <PlanYourDayQuickAdd tasks={unplannedTasks} />;
-            default:
-              return <PlanYourDayPriorities tasks={unplannedTasks} />;
-          }
-        })()
+            .map((t) => ({ id: t.id, title: t.title }))}
+        />
       )}
     </div>
   );
