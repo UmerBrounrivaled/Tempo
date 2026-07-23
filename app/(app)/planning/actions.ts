@@ -70,7 +70,7 @@ export async function planYourDay(formData: FormData): Promise<{ error?: string 
 
   // Persist the reordered priority as each task's order_index and the
   // explicit priority column (high/medium/low). High -> today, medium -> sooner, low -> later.
-  const updates: Promise<any>[] = [];
+  const updates: any[] = [];
   highIds.forEach((id, index) =>
     updates.push(
       supabase
@@ -100,7 +100,6 @@ export async function planYourDay(formData: FormData): Promise<{ error?: string 
   );
 
   await Promise.all(updates);
-  if (error) return { error: `Couldn't save your plan: ${error.message}` };
 
   // Persist the reordered priority as each task's order_index (existing
   // column in schema.sql, previously unused).
